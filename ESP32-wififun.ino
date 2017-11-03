@@ -1,11 +1,14 @@
-#include "WiFi.h"
-#include <MQTTClient.h>
-#include <Thread.h>
+#include "WiFi.h" 
+#include <MQTTClient.h>  // https://github.com/256dpi/arduino-mqtt 
+
+
 
 const char* ssid     = "STERNENGAST";
 const char* password = "abcdEFGH1234";
+
+
 #define uS_TO_S_FACTOR 1000000
-#define TIME_TO_SLEEP  60
+#define TIME_TO_SLEEP  300
 
 RTC_DATA_ATTR int bootCount = 0;
 
@@ -16,8 +19,7 @@ unsigned long lastMillis = 0;
 
 long long chipid;
 String sysid;
-
-Thread myThread = Thread();
+int sensorPin = 34;
 
 void wscan() {
   Serial.println("WiFi scanning...");
@@ -44,10 +46,17 @@ void wscan() {
 
 void wconnect() {
   static bool ledStatus = false;
+  long tc=0;
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
+
+    if(tc>300) {
+      Serial.println("Wifi timeout ... sleep");
+      esp_deep_sleep_start();  
+    }
+    tc++;
     ledStatus = !ledStatus;
-    digitalWrite(LED_BUILTIN, ledStatus;
+    digitalWrite(LED_BUILTIN, ledStatus);
     Serial.print(".");
     delay(100);
   }
@@ -123,7 +132,13 @@ void setup()
   Serial.print("\nmqtt connecting...");
   static bool ledStatus = false;
 
+  long tc=0;
   while (!client.connect((const char*)chipid)) {
+    if(tc>300) {
+      Serial.println("MQTT connect timeout ... sleep");
+      esp_deep_sleep_start();  
+    }
+    tc++;
     Serial.print("*");
     ledStatus = !ledStatus;
     digitalWrite(LED_BUILTIN, ledStatus);
@@ -133,7 +148,7 @@ void setup()
   Serial.println("\nmqtt connected!");
 
   String stringOne =  String(String("mjw/") + sysid + String("/boot"));
-  client.publish(stringOne, String(bootCount));
+  client.publish(stringOne, String(bootCount),1,1);
   Serial.println("loop start");
 
 }
@@ -143,7 +158,9 @@ void setup()
 void loop()
 {
   client.loop();
-  client.publish(String("mjw/" + sysid + "/temp"), String(temperatureRead()));
+  
+  client.publish(String("mjw/" + sysid + "/temp"), String(temperatureRead()),1,1);
+  client.publish(String("mjw/" + sysid + "/voltage"), String(analogRead(sensorPin)),1,1);
   client.disconnect();
   Serial.println("Going to sleep...");
 
